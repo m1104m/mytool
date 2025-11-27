@@ -1,0 +1,17 @@
+pbpaste | awk '
+NR==1{
+  n=split($0, a, "\t"); 
+  printf "|"; 
+  for(i=1;i<=n;i++)printf "%s|", a[i]; 
+  printf "\n|";
+  for(i=1;i<=n;i++)printf "---|";
+  print ""
+}
+NR>1{
+  n=split($0, a, "\t"); 
+  printf "|"; 
+  for(i=1;i<=n;i++)printf "%s|", a[i]; 
+  print ""
+}
+' | pbcopy
+

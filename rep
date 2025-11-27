@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+  echo "Usage: rep <from> <to>"
+  exit 1
+fi
+
+pbpaste | sed "s/$1/$2/g" | pbcopy
+
