@@ -15,18 +15,22 @@ date_str = yesterday.strftime('%Y-%m-%d')
 filename = f"{date_str}.md"
 filepath = os.path.join(DIRECTORY, filename)
 
-# Todoist APIから完了タスク取得
+# Todoist API v1 から完了タスク取得
 headers = {
     "Authorization": f"Bearer {API_TOKEN}"
 }
 params = {
-    "since": yesterday.replace(hour=0, minute=0, second=0).isoformat(),
-    "until": yesterday.replace(hour=23, minute=59, second=59).isoformat()
+    "since": f"{date_str}T00:00:00",
+    "until": f"{date_str}T23:59:59"
 }
+
 response = requests.get(
-    "https://api.todoist.com/sync/v9/completed/get_all",
-    headers=headers,
-    params=params
+    "https://api.todoist.com/api/v1/tasks/completed",
+    headers={"Authorization": f"Bearer {API_TOKEN}"},
+    params={
+        "since": f"{date_str}T00:00:00",
+        "until": f"{date_str}T23:59:59"
+    }
 )
 
 # API エラーハンドリング
@@ -34,11 +38,18 @@ if response.status_code != 200:
     print("❌ Todoist APIの呼び出しに失敗しました:", response.text)
     exit(1)
 
-completed_items = response.json().get("items", [])
+data = response.json()
+
+# 新API v1ではレスポンスが {"items": [...]} またはリスト直接の場合がある
+if isinstance(data, list):
+    completed_items = data
+elif isinstance(data, dict):
+    completed_items = data.get("items", data.get("results", []))
+else:
+    completed_items = []
 
 # 追記するテキスト構成
 lines = ["\n# Todoistでの完了項目\n"]
-
 if completed_items:
     for item in completed_items:
         lines.append(f"- {item.get('content', '（内容なし）')}")
@@ -61,4 +72,3 @@ else:
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(append_text)
     print(f"✅ 既存ファイルの末尾に追記しました: {filepath}")
-

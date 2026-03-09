@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ID="henry-prod"
+
+# ref名のプレフィックス → dataset のマッピング
+map_dataset() {
+  local ref_name="$1"
+
+  case "$ref_name" in
+    preprocessed_v2__*)
+      echo "dbt_view_preprocessed"
+      ;;
+    stg_general_v2__*)
+      echo "dbt_view_stg_general"
+      ;;
+    src_general_v2__*)
+      echo "dbt_view_src_general"
+      ;;
+    stg_receipt_v2__*)
+      echo "dbt_view_stg_receipt"
+      ;;
+    src_receipt_v2__*)
+      echo "dbt_view_src_receipt"
+      ;;
+    src_master_v2__*)
+      echo "dbt_view_src_master"
+      ;;
+    usecase_bi_v2__*)
+      echo "dbt_view_usecase_bi"
+      ;;
+    udf_v2__*)
+      echo "dbt_view_udf"
+      ;;
+    seed_v2__*)
+      echo "dbt_view_seed"
+      ;;
+    *)
+      echo "dbt_view_preprocessed"
+      ;;
+  esac
+}
+
+# {{ ref("xxx") }} を {{__REF__:xxx}} に一旦変換
+expand_refs() {
+  perl -pe '
+    use strict;
+    use warnings;
+
+    s{
+      \{\{\s*ref\(\s*["\x27]([^"\x27]+)["\x27]\s*\)\s*\}\}
+    }{
+      my $ref_name = $1;
+      "{{__REF__:$ref_name}}"
+    }egx;
+  '
+}
+
+# {{__REF__:xxx}} を `henry-prod.<dataset>.<table>` に最終展開
+finalize_refs() {
+  while IFS= read -r line; do
+    while [[ "$line" =~ \{\{__REF__:([^}]+)\}\} ]]; do
+      ref_name="${BASH_REMATCH[1]}"
+
+      dataset="$(map_dataset "$ref_name")"
+
+      # テーブル名は ref の中身から決める
+      table="$ref_name"
+
+      # preprocessed_v2__ の prefix はテーブル名から削る
+      if [[ "$ref_name" == preprocessed_v2__* ]]; then
+        table="${ref_name#preprocessed_v2__}"
+      fi
+
+      # 必要なら他の prefix もここで削る
+      # if [[ "$ref_name" == stg_general_v2__* ]]; then
+      #   table="${ref_name#stg_general_v2__}"
+      # fi
+      # ...
+
+      # バッククォート付きにするポイント
+      fqtn="\`${PROJECT_ID}.${dataset}.${table}\`"
+
+      line="${line/\{\{__REF__:${ref_name}\}\}/${fqtn}}"
+    done
+    printf '%s\n' "$line"
+  done
+}
+
+main() {
+  if ! command -v pbpaste >/dev/null 2>&1 || ! command -v pbcopy >/dev/null 2>&1; then
+    echo "pbpaste/pbcopy が見つかりません (macOS 前提のスクリプトです)。" >&2
+    exit 1
+  fi
+
+  input_sql="$(pbpaste)"
+
+  output_sql="$(printf '%s\n' "$input_sql" | expand_refs | finalize_refs)"
+
+  printf '%s\n' "$output_sql" | tee >(pbcopy) >/dev/null
+  echo "変換済みSQLをクリップボードにコピーしました。"
+}
+
+main "$@"
+

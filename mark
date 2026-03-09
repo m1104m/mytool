@@ -1,3 +1,13 @@
+#!/bin/bash
+
+# Required parameters:
+# @raycast.schemaVersion 1
+# @raycast.title "mark" spreadsheetの表からmarkdownの表にに変換
+# @raycast.mode compact
+
+# Optional parameters:
+# @raycast.icon 💻
+
 pbpaste | awk '
 NR==1{
   n=split($0, a, "\t"); 
